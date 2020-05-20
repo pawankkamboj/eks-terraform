@@ -24,7 +24,7 @@ variable "subnet_type" {
 
 variable "azs" {
   type = "list"
-  default = ["us-west-1a", "us-west-1b", "us-west-1c"]
+  default = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }
 
 variable "cluster_name" {
