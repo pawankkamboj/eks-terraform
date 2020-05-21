@@ -30,7 +30,7 @@ resource "aws_iam_role_policy_attachment" "policy_AmazonEKSServicePolicy" {
 resource "aws_security_group" "security_group" {
   name        = "${var.env}-${var.service}-sg-ekscluster"
   description = "Cluster communication with worker nodes"
-  vpc_id      = aws_vpc.vpc.id
+  vpc_id      = module.eks_vpc.vpc_id
 
   egress {
     from_port   = 0
@@ -54,18 +54,28 @@ resource "aws_security_group_rule" "security_group_rules" {
   type              = "ingress"
 }
 
-resource "aws_eks_cluster" "eks_cluster" {
-  name     = "${var.cluster_name}"
-  role_arn = aws_iam_role.iam_role.arn
+module "eks" {
+  source       = "terraform-aws-modules/eks/aws"
+  cluster_name = var.cluster_name
+  subnets      = module.eks_vpc.private_subnets
+  vpc_id = module.eks_vpc.vpc_id
 
-  vpc_config {
-    endpoint_private_access = true
-    security_group_ids = [aws_security_group.security_group.id]
-    subnet_ids         = aws_subnet.subnet[*].id
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.policy_AmazonEKSClusterPolicy,
-    aws_iam_role_policy_attachment.policy_AmazonEKSServicePolicy,
+  worker_groups = [
+    {
+      name                          = "worker-group-1"
+      instance_type                 = "t2.small"
+      additional_userdata           = "echo foo bar"
+      asg_desired_capacity          = 2
+      additional_security_group_ids = [aws_security_group.worker_group_mgmt]
+    }
   ]
 }
+
+data "aws_eks_cluster" "cluster" {
+  name = module.eks.cluster_id
+}
+
+data "aws_eks_cluster_auth" "cluster" {
+  name = module.eks.cluster_id
+}
+

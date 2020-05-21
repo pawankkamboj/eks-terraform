@@ -1,30 +1,24 @@
 variable "region" {
-  default = "us-east-1"
+  default = "ap-south-1"
   description = "AWS region"
 }
 
 variable "vpc_name" {
-  type = "string"
   default = "eks-vpc"
 }
 
-variable "vpc_cidr" {
+variable "eks_vpc_cidr" {
   default  = "10.0.0.0/16"
 }
 
 variable "subnet_cidrs" {
-  type = "list"
+  type = list(string)
   default = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 }
 
-variable "subnet_type" {
-  type = "string"
-  default = "private"
-}
-
 variable "azs" {
-  type = "list"
-  default = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  type = list(string)
+  default = ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
 }
 
 variable "cluster_name" {
@@ -33,16 +27,13 @@ variable "cluster_name" {
 }
 
 variable "env" {
-  type = "string"
   default = "test"
 }
 
 variable "team" {
-  type = "string"
   default = "devops"
 }
 
 variable "service" {
-  type = "string"
   default = "devops"
 }

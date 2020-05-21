@@ -1,71 +1,78 @@
-#
-resource "aws_vpc" "vpc" {
-  cidr_block             = "${var.vpc_cidr}"
-  enable_dns_hostnames   =  true
-  enable_dns_support     =  true
-
-  tags = map(
-    "Name", "${var.env}-${var.service}-vpc",
-    "kubernetes.io/cluster/${var.cluster_name}", "shared",
-  )
+data "aws_security_group" "default_sg" {
+  name   = "default"
+  vpc_id = module.eks_vpc.vpc_id
 }
 
-resource "aws_subnet" "subnet" {
-  count = "${length(var.subnet_cidrs)}"
-
-  availability_zone       = "${element(var.azs, count.index)}"
-  cidr_block              = "${element(var.subnet_cidrs, count.index)}"
-  vpc_id                  = aws_vpc.vpc.id
-
-  tags = map(
-    "Name", "${var.env}-${var.service}-${var.subnet_type}-subnets",
-    "SubnetType", "${var.subnet_type}",
-    "kubernetes.io/cluster/${var.cluster_name}", "shared",
-  )
+data "aws_subnet" "private_subnet_1" {
+  availability_zone = var.azs[0]
+  vpc_id            = module.eks_vpc.vpc_id
+  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 0)}"
+}
+data "aws_subnet" "private_subnet_2" {
+  availability_zone = var.azs[1]
+  vpc_id            = module.eks_vpc.vpc_id
+  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 1)}"
+}
+data "aws_subnet" "private_subnet_3" {
+  availability_zone = var.azs[2]
+  vpc_id            = module.eks_vpc.vpc_id
+  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 2)}"
 }
 
-resource "aws_internet_gateway" "ig" {
-  vpc_id = aws_vpc.vpc.id
-
-  tags = {
-    Name = "${var.env}-${var.service}-ig"
-  }
-}
-
-resource "aws_route_table" "route_table" {
-  vpc_id = aws_vpc.vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.ig.id
-  }
-  tags = {
-    Name = "${var.env}-${var.service}-rt"
-  }
-}
-
-resource "aws_route_table_association" "route_table_a" {
-  count = "${length(var.subnet_cidrs)}"
-
-  subnet_id      = aws_subnet.subnet.*.id[count.index]
-  route_table_id = aws_route_table.route_table.id
-}
-
-
-resource "aws_eip" "eips" {
+resource "aws_eip" "eks_vpc_nat_eips" {
   vpc   = true
-  count = "${length(var.azs)}"
+  count = length(var.azs)
   tags = {
-    Name = "${var.env}-${var.service}-eips-${element(var.azs, count.index)}"
+    Name = "${var.env}-${var.service}-${element(var.azs, count.index)}"
+  }
+}
+module "eks_vpc" {
+  source = "terraform-aws-modules/vpc/aws"
+  version = "2.6.0"
+
+  name = "${var.env}-${var.service}-vpc"
+  cidr = var.eks_vpc_cidr
+
+  azs  = var.azs
+  private_subnets = [
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 0)}",
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 1)}",
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 2)}"
+  ]
+  public_subnets  = [
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 20)}",
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 21)}",
+    "${cidrsubnet(var.eks_vpc_cidr, 8, 22)}"
+  ]
+
+  # VPC DNS & NAT
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  enable_nat_gateway   = true
+  one_nat_gateway_per_az = true
+  single_nat_gateway     = false
+  reuse_nat_ips          = true
+  #external_nat_ip_ids    = [
+  #  "${aws_eip.eks_vpc_nat_eips.*.id}"
+  #]
+
+  tags = {
+    Terraform = "true"
+    Service   = var.service
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+  }
+
+  public_subnet_tags = {
+     SubnetType = "public"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/elb"                      = "1"
+  }
+
+  private_subnet_tags = {
+     SubnetType = "private"
+    "kubernetes.io/cluster/${var.cluster_name}" = "shared"
+    "kubernetes.io/role/internal-elb"             = "1"
   }
 }
 
-resource "aws_nat_gateway" "gw" {
-  count = "${length(var.subnet_cidrs)}"
-  allocation_id = aws_eip.eips.*.id[count.index]
-  subnet_id      = aws_subnet.subnet.*.id[count.index]
-  tags = {
-    Name = "${var.env}-${var.service}-gw-${element(var.azs, count.index)}"
-  }
-}
 
