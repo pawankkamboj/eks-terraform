@@ -1,34 +1,7 @@
-data "aws_security_group" "default_sg" {
-  name   = "default"
-  vpc_id = module.eks_vpc.vpc_id
-}
 
-data "aws_subnet" "private_subnet_1" {
-  availability_zone = var.azs[0]
-  vpc_id            = module.eks_vpc.vpc_id
-  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 0)}"
-}
-data "aws_subnet" "private_subnet_2" {
-  availability_zone = var.azs[1]
-  vpc_id            = module.eks_vpc.vpc_id
-  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 1)}"
-}
-data "aws_subnet" "private_subnet_3" {
-  availability_zone = var.azs[2]
-  vpc_id            = module.eks_vpc.vpc_id
-  cidr_block        = "${cidrsubnet(var.eks_vpc_cidr, 8, 2)}"
-}
-
-resource "aws_eip" "eks_vpc_nat_eips" {
-  vpc   = true
-  count = length(var.azs)
-  tags = {
-    Name = "${var.env}-${var.service}-${element(var.azs, count.index)}"
-  }
-}
 module "eks_vpc" {
   source = "terraform-aws-modules/vpc/aws"
-  version = "2.6.0"
+  version = "2.33.0"
 
   name = "${var.env}-${var.service}-vpc"
   cidr = var.eks_vpc_cidr
@@ -51,10 +24,6 @@ module "eks_vpc" {
   enable_nat_gateway   = true
   one_nat_gateway_per_az = true
   single_nat_gateway     = false
-  reuse_nat_ips          = true
-  #external_nat_ip_ids    = [
-  #  "${aws_eip.eks_vpc_nat_eips.*.id}"
-  #]
 
   tags = {
     Terraform = "true"
